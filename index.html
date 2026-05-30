@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // Polyfill to prevent crashes when external scripts/libraries try to set window.fetch
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          var descriptor = {
+            get: function() {
+              return originalFetch;
+            },
+            set: function(val) {
+              console.warn("[Sandbox Polyfill] Overwriting fetch:", val);
+              originalFetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          };
+          Object.defineProperty(window, 'fetch', descriptor);
+          if (typeof globalThis !== 'undefined') {
+            Object.defineProperty(globalThis, 'fetch', descriptor);
+          }
+        } catch (e) {
+          console.warn("[Sandbox Polyfill] Failed to redefine fetch setter:", e);
+        }
+
+        // Absolute safety shield for JSON.parse to prevent uncaught "undefined" is not valid JSON crashes
+        try {
+          var originalParse = JSON.parse;
+          JSON.parse = function(text, reviver) {
+            if (text === undefined || text === null || text === "undefined" || text === "null" || text === "") {
+              return null;
+            }
+            return originalParse(text, reviver);
+          };
+        } catch (e) {
+          console.warn("[Sandbox Polyfill] Failed to redefine JSON.parse:", e);
+        }
+
+        // Global Storage prototype safety to prevent storing "undefined" or returning it to callers
+        try {
+          var originalGetItem = Storage.prototype.getItem;
+          Storage.prototype.getItem = function(key) {
+            var val = originalGetItem.call(this, key);
+            if (val === "undefined" || val === "null") {
+              return null;
+            }
+            return val;
+          };
+
+          var originalSetItem = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(key, val) {
+            if (val === undefined || val === null || val === "undefined" || val === "null") {
+              this.removeItem(key);
+            } else {
+              originalSetItem.call(this, key, val);
+            }
+          };
+        } catch (e) {
+          console.warn("[Sandbox Polyfill] Failed to redefine Storage prototype:", e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,8 @@
+{
+  "name": "Brainrot",
+  "description": "A playful, cartoonish, 2D game-like study web app featuring Pomodoro timers, AI study buddies, interactive quizzes, summaries, custom notes, and gamified progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

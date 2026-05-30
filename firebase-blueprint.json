@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile and Stats",
+      "description": "User statistics and mascot configuration on Brainrot",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "avatar": { "type": "string", "enum": ["student", "robot", "owl", "cat"] },
+        "email": { "type": "string", "format": "email" },
+        "xp": { "type": "integer" },
+        "level": { "type": "integer" },
+        "streak": { "type": "integer" },
+        "totalFocusMinutes": { "type": "integer" },
+        "completedPomodoros": { "type": "integer" },
+        "totalQuizzesTaken": { "type": "integer" },
+        "lastActiveDate": { "type": "string" }
+      },
+      "required": ["uid", "username", "avatar", "xp", "level", "streak"]
+    },
+    "Note": {
+      "title": "Study Note",
+      "description": "Custom study notes or bookmarks created by the student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "isPinned": { "type": "boolean" }
+      },
+      "required": ["id", "title", "content", "category", "createdAt"]
+    },
+    "HistoryItem": {
+      "title": "History Accomplishment",
+      "description": "Historical timeline item logging student focus achievements and XP gains",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "xp": { "type": "integer" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "title", "xp", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Top-level collection for Google authenticated user configurations and stats"
+    },
+    "users/{userId}/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Sub-collection containing user-specific notes and study books"
+    },
+    "users/{userId}/history/{historyId}": {
+      "schema": "HistoryItem",
+      "description": "Sub-collection logging user accomplishment timeline logs"
+    }
+  }
+}
