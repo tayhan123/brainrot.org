@@ -542,6 +542,53 @@ export default function DashboardView({
         </div>
       </div>
 
+      {/* 1.5. Visual Progress Tracker for Daily XP Goals */}
+      <div 
+        id="daily-xp-progress-tracker" 
+        className="bg-[#FFFDF9] rounded-3xl p-5 border-2 border-indigo-950 shadow-[4px_4px_0px_0px_rgba(30,27,75,1)] flex flex-col md:flex-row items-center justify-between gap-5 flex-shrink-0"
+      >
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border-2 border-indigo-950 flex items-center justify-center text-2xl flex-shrink-0 shadow-[2px_2px_0px_0px_rgba(30,27,75,1)]">
+            🎯
+          </div>
+          <div>
+            <h3 className="font-display font-black text-indigo-950 text-base flex items-center gap-2">
+              Daily XP Target Progress
+              <span className="text-xs font-mono font-black text-[#7D69EC] bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-950/10">
+                Goal: {dailyXpTarget} XP
+              </span>
+            </h3>
+            <p className="text-xs font-sans font-semibold text-gray-500 mt-0.5">
+              {currentDailyProgress >= 100 
+                ? "🎉 Daily target reached! You operate at maximum learning frequency overdrive today! 🚀" 
+                : `🔥 Completed ${currentDailyProgress}% of today's target. Finish ${Math.max(0, dailyXpTarget - stats.xp)} more XP to secure the daily lock-in!`
+              }
+            </p>
+          </div>
+        </div>
+
+        <div className="w-full md:w-[350px] flex flex-col gap-1.5">
+          <div className="flex justify-between items-center text-xs font-display font-black text-indigo-950">
+            <span>Progress: {stats.xp} / {dailyXpTarget} XP</span>
+            <span className="text-[#7D69EC] font-mono">{currentDailyProgress}%</span>
+          </div>
+          
+          {/* Custom Styled responsive progress bar */}
+          <div className="w-full bg-slate-100 h-6 rounded-full overflow-hidden p-0.5 relative border-2 border-indigo-950 shadow-inner flex items-center">
+            <div
+              className="bg-gradient-to-r from-[#7D69EC] to-amber-400 h-full rounded-full transition-all duration-500 ease-out flex items-center justify-end pr-2.5 relative"
+              style={{ width: `${currentDailyProgress}%` }}
+            >
+              {currentDailyProgress >= 15 && (
+                <span className="text-[10px] font-mono font-black text-white drop-shadow-[1px_1px_0px_rgba(30,27,75,0.7)] select-none">
+                  ⚡
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Grid Layout of Widgets & Interactive Blocks */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 flex-shrink-0">
         

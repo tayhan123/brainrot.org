@@ -765,7 +765,7 @@ export default function App() {
               { tab: "notes", label: "Notes", icon: "📝" },
               { tab: "summarize", label: "Flashcards", icon: "🗂️" },
               { tab: "quiz", label: "Quizzes", icon: "❓" },
-              { tab: "pomodoro", label: "Subjects", icon: "📚" },
+              { tab: "pomodoro", label: "Study Timer", icon: "⏱️" },
               { tab: "progress", label: "Progress", icon: "📊" },
               { tab: "bookmarks", label: "Bookmarks", icon: "🔖" },
               { tab: "settings", label: "Settings", icon: "⚙️" }
@@ -879,6 +879,7 @@ export default function App() {
             setMode={setPomodoroMode}
             cycleCount={pomodoroCycleCount}
             setCycleCount={setPomodoroCycleCount}
+            notes={notes}
           />
         )}
 

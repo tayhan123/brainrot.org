@@ -1,11 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, MessageCircle, RefreshCw, ThumbsUp, ArrowRight } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Send, Sparkles, MessageCircle, RefreshCw, ThumbsUp, ArrowRight, Image as ImageIcon, Paperclip, X, Download } from "lucide-react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   time: string;
+  attachedImage?: string; // base64 representation of attached image
+  generatedImage?: string; // base64 or URL representation of assistant's drawing
 }
 
 interface ChatAssistantProps {
@@ -17,11 +19,14 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
     {
       id: "init",
       role: "assistant",
-      content: "Hey, study champ! I'm Gizmo, your AI Study Buddy! ✨ Ready to locks-maxx your brain? You can ask me to explain any complex topic simply, write a roadmap, or test you!",
+      content: "Hey, study champ! I'm Gizmo, your AI Study Buddy! ✨ Ready to locks-maxx your brain? You can ask me to explain any complex topic simply, write a roadmap, test you, or generate/view visual drawings & diagrams! Or ask me to solve any math formula by uploading an image!",
       time: "10:30 AM",
     }
   ]);
   const [inputVal, setInputVal] = useState("");
+  const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string; name: string } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -64,27 +69,41 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
   };
 
   const handleSendMessage = async (textToSend: string) => {
-    if (!textToSend.trim() || isLoading) return;
+    if ((!textToSend.trim() && !selectedImage) || isLoading) return;
+
+    const base64Attached = selectedImage ? selectedImage.data : undefined;
 
     const userMsg: Message = {
       id: Math.random().toString(),
       role: "user",
-      content: textToSend,
+      content: textToSend.trim() || "What does this image show? Solve or explain it to me nicely, Gizmo!",
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      attachedImage: base64Attached,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInputVal("");
+    setSelectedImage(null);
     setIsLoading(true);
     playChime("bubble");
 
     try {
       // Build proper chat context history
-      // Keep only key fields matching { role, content }
-      const history = [...messages, userMsg].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const history = [...messages, userMsg].map((m) => {
+        const mapped: any = {
+          role: m.role,
+          content: m.content,
+        };
+        if (m.attachedImage) {
+          const match = m.attachedImage.match(/^data:(image\/[a-zA-Z+.-]+);base64,/);
+          const mimeType = match ? match[1] : "image/png";
+          mapped.image = {
+            data: m.attachedImage,
+            mimeType: mimeType
+          };
+        }
+        return mapped;
+      });
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -93,7 +112,19 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
       });
 
       if (!res.ok) {
-        throw new Error("Gizmo took too long or is asleep.");
+        let errMsg = "Gizmo took too long or is asleep.";
+        try {
+          const errData = await res.json();
+          if (errData && (errData.error || errData.message)) {
+            errMsg = errData.error || errData.message;
+          }
+        } catch {
+          try {
+            const txt = await res.text();
+            if (txt && txt.length < 200) errMsg = txt;
+          } catch {}
+        }
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -102,6 +133,7 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
         role: "assistant",
         content: data.content,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        generatedImage: data.generatedImage,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -128,9 +160,77 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
     handleSendMessage(promptText);
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    }
+  };
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file (PNG, JPG, WebP), study mate! 🖼️");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImage({
+        data: reader.result as string,
+        mimeType: file.type,
+        name: file.name
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const triggerFileSelect = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto py-2">
-      <div className="cartoon-card bg-[#FBF7F0] p-4 md:p-6 flex flex-col h-[600px] relative overflow-hidden">
+      <div 
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="cartoon-card bg-[#FBF7F0] p-4 md:p-6 flex flex-col h-[600px] relative overflow-hidden"
+      >
+        {/* Hidden File Picker */}
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange}
+          accept="image/*" 
+          className="hidden" 
+        />
+
+        {/* Drag Over Overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-xs border-4 border-dashed border-indigo-500 rounded-3xl flex flex-col items-center justify-center z-50 pointer-events-none">
+            <div className="bg-[#FAF6F0] p-6 rounded-3xl border-4 border-indigo-950 shadow-[4px_4px_0px_0px_rgba(30,27,75,1)] flex flex-col items-center gap-2">
+              <span className="text-4xl animate-bounce">📥</span>
+              <p className="font-display font-black text-indigo-950">Drop Study Photo to solve!</p>
+            </div>
+          </div>
+        )}
+
         {/* Chat Header matching the cartoon mockup theme */}
         <div className="flex items-center justify-between border-b-4 border-indigo-950 pb-4 mb-4">
           <div className="flex items-center gap-3">
@@ -191,7 +291,7 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
                 </div>
 
                 {/* Bubble card */}
-                <div>
+                <div className="flex flex-col items-start gap-1">
                   <div
                     className={`p-3 md:p-4 border-3 border-indigo-950 rounded-2xl text-sm font-sans ${
                       isGizmo
@@ -201,8 +301,55 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
                   >
                     {/* Preserve rich typography linebreaks */}
                     <p className="whitespace-pre-wrap leading-relaxed inline-block">{msg.content}</p>
+
+                    {/* Image from user (uploaded) */}
+                    {!isGizmo && msg.attachedImage && (
+                      <div className="mt-2.5 max-w-xs rounded-xl overflow-hidden border-3 border-indigo-950 shadow-[2px_2px_0px_0px_rgba(30,27,75,1)] bg-white">
+                        <img 
+                          src={msg.attachedImage} 
+                          alt="Attached problem/formula sketch" 
+                          className="max-h-48 w-full object-cover select-none"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+
+                    {/* Image from Gizmo (generated/drawn code concept flowchart) */}
+                    {isGizmo && msg.generatedImage && (
+                      <div className="mt-3 max-w-sm rounded-xl overflow-hidden border-3 border-indigo-950 shadow-[3px_3px_0px_0px_rgba(30,27,75,1)] bg-white">
+                        <div className="bg-indigo-950 text-white px-2.5 py-1 text-[10px] font-display font-black tracking-wide flex justify-between items-center border-b-2 border-indigo-950">
+                          <span>🎨 GIZMO VISUAL SKETCH</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const link = document.createElement("a");
+                              link.href = msg.generatedImage!;
+                              link.download = `gizmo-diagram-${msg.id || "export"}.png`;
+                              if (msg.generatedImage!.startsWith("data:image/svg")) {
+                                link.download = `gizmo-diagram-${msg.id || "export"}.svg`;
+                              }
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-1.5 py-0.5 rounded text-[9px] font-bold border border-white flex items-center gap-1 leading-none shadow-[1px_1px_0px_0px_white]"
+                          >
+                            <Download className="w-2.5 h-2.5" /> Save
+                          </button>
+                        </div>
+                        <div className="p-1 bg-gray-50 flex items-center justify-center">
+                          <img 
+                            src={msg.generatedImage} 
+                            alt="Gizmo educational diagram drawing" 
+                            className="max-h-60 object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 font-mono mt-1 block px-1">
+                  <span className={`text-[10px] font-bold text-gray-500 font-mono mt-0.5 block px-1 ${!isGizmo ? "self-end" : ""}`}>
                     {msg.time}
                   </span>
                 </div>
@@ -236,24 +383,50 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
             </span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               <button
-                onClick={() => handleQuickPrompt("Explain photosynthesis in simple terms") }
-                className="text-[11px] font-display font-bold px-3 py-1 bg-yellow-200 border-2 border-indigo-950 rounded-xl hover:bg-yellow-300 active:translate-y-0.5 transition-all"
+                onClick={() => handleQuickPrompt("Draw an educational diagram showing how photosynthesis transforms solar energy!") }
+                className="text-[11px] font-display font-medium px-3 py-1 bg-yellow-200 border-2 border-indigo-950 rounded-xl hover:bg-yellow-300 active:translate-y-0.5 transition-all"
               >
-                🌱 Photosynthesis Simple
+                🎨 Draw Photosynthesis
               </button>
               <button
-                onClick={() => handleQuickPrompt("Explain Newton's laws with an exciting analogy") }
-                className="text-[11px] font-display font-bold px-3 py-1 bg-pink-200 border-2 border-indigo-950 rounded-xl hover:bg-pink-300 active:translate-y-0.5 transition-all"
+                onClick={() => handleQuickPrompt("Draw a cool physics gravity diagram illustrating objects orbiting a star!") }
+                className="text-[11px] font-display font-medium px-3 py-1 bg-pink-200 border-2 border-indigo-950 rounded-xl hover:bg-pink-300 active:translate-y-0.5 transition-all"
               >
-                🍎 Newton's Laws
+                🪐 Draw Orbits
               </button>
               <button
-                onClick={() => handleQuickPrompt("Give me a cheat sheet map for calculus integrals") }
-                className="text-[11px] font-display font-bold px-3 py-1 bg-sky-200 border-2 border-indigo-950 rounded-xl hover:bg-sky-300 active:translate-y-0.5 transition-all"
+                onClick={triggerFileSelect}
+                type="button"
+                className="text-[11px] font-display font-medium px-3 py-1 bg-emerald-200 border-2 border-indigo-950 rounded-xl hover:bg-emerald-300 active:translate-y-0.5 transition-all inline-flex items-center gap-1.5"
               >
-                📐 Integral Cheat Sheet
+                📷 Upload Scan / Math Eq
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Attachment preview */}
+        {selectedImage && (
+          <div className="mb-2.5 p-2 bg-indigo-50 border-3 border-indigo-950 rounded-xl flex items-center justify-between gap-3 animate-fade-in shadow-[2px_2px_0px_0px_rgba(30,27,75,1)]">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <img 
+                src={selectedImage.data} 
+                alt="Upload preview" 
+                className="w-10 h-10 object-cover rounded-lg border-2 border-indigo-950" 
+                referrerPolicy="no-referrer"
+              />
+              <div className="text-left overflow-hidden">
+                <p className="text-xs font-bold text-indigo-950 truncate max-w-[200px]">{selectedImage.name}</p>
+                <p className="text-[10px] text-gray-500 font-mono font-bold">Image ready & attached for scanner!</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              className="p-1 bg-rose-200 hover:bg-rose-300 text-rose-800 rounded-full border-2 border-indigo-950 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
@@ -263,22 +436,32 @@ export default function ChatAssistant({ addXp }: ChatAssistantProps) {
             e.preventDefault();
             handleSendMessage(inputVal);
           }}
-          className="flex gap-2.5 items-center mt-auto bg-white p-1 rounded-2xl border-3 border-indigo-950 shadow-[4px_4px_0px_0px_rgba(30,27,75,1)]"
+          className="flex gap-2 items-center mt-auto bg-white p-1.5 rounded-2xl border-3 border-indigo-950 shadow-[4px_4px_0px_0px_rgba(30,27,75,1)]"
         >
+          {/* File attachment button icon */}
+          <button
+            type="button"
+            title="Attach a scan, diagram or formula"
+            onClick={triggerFileSelect}
+            className="p-2.5 bg-indigo-100 hover:bg-indigo-200 rounded-xl border-2 border-indigo-950 text-indigo-950 transition-all flex items-center justify-center shadow-[1px_1px_0px_0px_rgba(30,27,75,1)] hover:-translate-y-0.5"
+          >
+            <ImageIcon className="w-5 h-5 animate-pulse" />
+          </button>
+
           <input
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             disabled={isLoading}
-            placeholder="Ask anything, Gizmo will breakdown..."
-            className="flex-1 font-sans text-sm py-3 px-4 focus:outline-none rounded-xl"
+            placeholder={selectedImage ? "Describe this image or click send..." : "Ask Gizmo anything, drag images here, or click 📷..."}
+            className="flex-1 font-sans text-sm py-2.5 px-3 focus:outline-none rounded-xl"
           />
           <button
             type="submit"
-            disabled={isLoading || !inputVal.trim()}
-            className="cartoon-btn p-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 disabled:opacity-50 text-white flex items-center justify-center mr-1"
+            disabled={isLoading || (!inputVal.trim() && !selectedImage)}
+            className="cartoon-btn p-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 disabled:opacity-50 text-white flex items-center justify-center"
           >
-            <Send className="w-5 h-5 fill-white" />
+            <Send className="w-4 h-4 fill-white" />
           </button>
         </form>
       </div>

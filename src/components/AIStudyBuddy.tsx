@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, ChangeEvent, DragEvent } from "react";
-import { Send, Sparkles, Flame, Paperclip, Image, Mic, Plus, FileText, Check } from "lucide-react";
+import { Send, Sparkles, Flame, Paperclip, Image, Mic, Plus, FileText, Check, Palette } from "lucide-react";
 import StudyAvatar, { AvatarType } from "./StudyAvatar";
 import { Note } from "../types";
 
@@ -84,6 +84,7 @@ export default function AIStudyBuddy({
   const [loading, setLoading] = useState(false);
   const [attachedImage, setAttachedImage] = useState<{ mimeType: string; data: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDrawMode, setIsDrawMode] = useState(false);
 
   // States for attaching diagrams to notes
   const [attachingDiagram, setAttachingDiagram] = useState<string | null>(null);
@@ -180,6 +181,41 @@ export default function AIStudyBuddy({
     }
     setLoading(true);
 
+    if (isDrawMode) {
+      try {
+        const drawResponse = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: text })
+        });
+
+        if (!drawResponse.ok) {
+          throw new Error("Unable to paint right now. My canvas fell over!");
+        }
+
+        const drawData = await drawResponse.json();
+        const assistantMsg: Message = {
+          role: "assistant",
+          content: `Whoa, look what I drew for you! 🎨 Standard rendering parameters complete. Feel free to attach this study aid to your note scrawls! ("${text}")`,
+          generatedImage: drawData.image
+        };
+
+        setMessages((prev) => [...prev, assistantMsg]);
+        playSound("success");
+        addXp(20, "Illustrated mind concept! 🎨🧠");
+        setIsDrawMode(false);
+      } catch (error: any) {
+        playSound("fail");
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `🚨 My paint brush snapped: ${error.message}` }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -187,7 +223,21 @@ export default function AIStudyBuddy({
         body: JSON.stringify({ messages: newMessages })
       });
 
-      if (!response.ok) throw new Error("Gizmo went offline momentarily!");
+      if (!response.ok) {
+        let errMsg = "Gizmo went offline momentarily!";
+        try {
+          const errData = await response.json();
+          if (errData && (errData.error || errData.message)) {
+            errMsg = errData.error || errData.message;
+          }
+        } catch {
+          try {
+            const txt = await response.text();
+            if (txt && txt.length < 200) errMsg = txt;
+          } catch {}
+        }
+        throw new Error(errMsg);
+      }
       const data = await response.json();
       
       const assistantMsg: Message = { 
@@ -658,6 +708,23 @@ export default function AIStudyBuddy({
         </div>
       )}
 
+      {/* Draw Mode Notification Bar */}
+      {isDrawMode && (
+        <div className="mb-2.5 p-2 bg-[#FFF9E6] border-2 border-[#1E1B4B] rounded-xl flex items-center justify-between text-[11px] font-display font-black text-[#5C3F00] shadow-[1.5px_1.5px_0px_0px_#1E1B4B] animate-fade-in w-full max-w-sm self-start">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">🎨</span>
+            <span><b>Gizmo Draw Mode</b>: Describe any study illustration to generate!</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { playSound("pop"); setIsDrawMode(false); }}
+            className="text-amber-800 hover:text-red-500 font-extrabold px-1 text-[11px] cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Input component matching reference mock */}
       <form
         onSubmit={(e) => {
@@ -675,6 +742,21 @@ export default function AIStudyBuddy({
         />
 
         <div className="flex items-center gap-1 text-indigo-950/70 mr-3 border-r-3 border-indigo-950/10 pr-2">
+          <button
+            type="button"
+            onClick={() => {
+              playSound("pop");
+              setIsDrawMode(!isDrawMode);
+            }}
+            className={`p-1.5 active:scale-95 transition-all rounded-lg cursor-pointer duration-100 ${
+              isDrawMode 
+                ? "bg-[#FFEAA5] text-amber-950 border-2 border-indigo-950" 
+                : "hover:bg-indigo-50 text-indigo-950"
+            }`}
+            title="Toggle Drawing Engine (Generate Image Mode) 🎨"
+          >
+            <Palette className="w-4 h-4" />
+          </button>
           <button
             type="button"
             onClick={() => { playSound("pop"); fileInputRef.current?.click(); }}
@@ -705,17 +787,31 @@ export default function AIStudyBuddy({
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={attachedImage ? "File attached! Describe the math question to solve..." : "Ask Gizmo anything, or drag an image here to solve..."}
+          placeholder={
+            isDrawMode 
+              ? "Describe the diagram or illustration to generate (e.g. Atomic Structure, Water cycle)..."
+              : attachedImage 
+                ? "File attached! Describe the math question to solve..." 
+                : "Ask Gizmo anything, or drag an image here to solve..."
+          }
           className="flex-grow bg-transparent text-xs sm:text-sm focus:outline-none text-[#1E1B4B] font-display font-black leading-none py-1.5 tracking-wide placeholder-slate-400"
         />
 
         <button
           type="submit"
-          className="cartoon-btn ml-2 px-4 py-2 bg-[#7D69EC] hover:bg-[#6853DF] text-white font-display font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_#1E1B4B]"
-          title="Send"
+          className={`cartoon-btn ml-2 px-4 py-2 font-display font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_#1E1B4B] transition-colors ${
+            isDrawMode 
+              ? "bg-[#FFEAA5] hover:bg-[#FFD738] text-amber-950 border-[#1E1B4B]" 
+              : "bg-[#7D69EC] hover:bg-[#6853DF] text-white"
+          }`}
+          title={isDrawMode ? "Generate Study Image" : "Send"}
         >
-          <span>Send</span>
-          <Send className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+          <span>{isDrawMode ? "Generate" : "Send"}</span>
+          {isDrawMode ? (
+            <Sparkles className="w-3.5 h-3.5 text-amber-950 animate-bounce" />
+          ) : (
+            <Send className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+          )}
         </button>
       </form>
 
